@@ -1,7 +1,7 @@
 ﻿namespace Encamina.Enmarcha.SemanticKernel.Plugins.Text;
 
 /// <summary>
-/// Information about plguins in this assembly.
+/// Information about plugins in this assembly.
 /// </summary>
 public static class PluginsInfo
 {
@@ -48,6 +48,38 @@ public static class PluginsInfo
             }
 
             /// <summary>
+            /// Information about the «KeyPhrasesLocaled» function.
+            /// </summary>
+            public static class KeyPhrasesLocaled
+            {
+                /// <summary>
+                /// The name of the function.
+                /// </summary>
+                public static readonly string Name = nameof(KeyPhrasesLocaled);
+
+                /// <summary>
+                /// Information about the function's parameters.
+                /// </summary>
+                public static class Parameters
+                {
+                    /// <summary>
+                    /// The name of the «input» parameter, which represents the text to analyze and extract keyphrases from.
+                    /// </summary>
+                    public static readonly string Input = nameof(Input).ToLowerInvariant();
+
+                    /// <summary>
+                    /// The name of the «locale» parameter, which represents the language in which the keyphrases will be generated.
+                    /// </summary>
+                    public static readonly string Locale = nameof(Locale).ToLowerInvariant();
+
+                    /// <summary>
+                    /// The name of the «topKeyphrases» parameter, which represents the maximum or top number of keyphrases to extract.
+                    /// </summary>
+                    public static readonly string TopKeyphrases = nameof(TopKeyphrases).ToLowerInvariant();
+                }
+            }
+
+            /// <summary>
             /// Information about the «Summarize» function.
             /// </summary>
             public static class Summarize
@@ -74,6 +106,33 @@ public static class PluginsInfo
 
                     /// <summary>
                     /// The name of the «locale» parameter, which represents the language in which the summary will be generated.
+                    /// </summary>
+                    public static readonly string Locale = nameof(Locale).ToLowerInvariant();
+                }
+            }
+
+            /// <summary>
+            /// Information about the «Translate» function.
+            /// </summary>
+            public static class Translate
+            {
+                /// <summary>
+                /// The name of the function.
+                /// </summary>
+                public static readonly string Name = nameof(Translate);
+
+                /// <summary>
+                /// Information about the function's parameters.
+                /// </summary>
+                public static class Parameters
+                {
+                    /// <summary>
+                    /// The name of the «input» parameter, which represents the text to translate.
+                    /// </summary>
+                    public static readonly string Input = nameof(Input).ToLowerInvariant();
+
+                    /// <summary>
+                    /// The name of the «locale» parameter, which represents the language in which the translation will be generated.
                     /// </summary>
                     public static readonly string Locale = nameof(Locale).ToLowerInvariant();
                 }

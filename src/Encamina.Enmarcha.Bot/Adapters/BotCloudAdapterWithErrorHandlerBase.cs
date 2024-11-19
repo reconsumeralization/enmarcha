@@ -19,7 +19,7 @@ namespace Encamina.Enmarcha.Bot.Adapters;
 
 /// <summary>
 /// Base class for bot adapters with custom error handling that implements the Bot Framework Protocol and can
-/// be hosted in different cloud environmens, both public and private. <b>This class is abstract.</b>
+/// be hosted in different cloud environments, both public and private. <b>This class is abstract.</b>
 /// </summary>
 public class BotCloudAdapterWithErrorHandlerBase : CloudAdapter
 {
@@ -47,13 +47,13 @@ public class BotCloudAdapterWithErrorHandlerBase : CloudAdapter
     /// <summary>
     /// Gets this adapter's options.
     /// </summary>
-    protected virtual IBotAdapterOptions<BotCloudAdapterWithErrorHandlerBase> Options { get; init; }
+    protected virtual IBotAdapterOptions<BotCloudAdapterWithErrorHandlerBase>? Options { get; init; }
 
     /// <summary>
     /// An error handler that can catch exceptions in the middleware or application.
     /// </summary>
     /// <param name="turnContext">The current turn context.</param>
-    /// <param name="exception">The catched excetion.</param>
+    /// <param name="exception">The caught exception.</param>
     /// <returns>A task that represents the asynchronous error handling operation.</returns>
     protected virtual async Task ErrorHandlerAsync(ITurnContext turnContext, Exception exception)
     {

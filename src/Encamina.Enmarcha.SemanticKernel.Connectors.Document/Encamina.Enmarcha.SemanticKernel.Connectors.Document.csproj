@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -7,25 +7,33 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <NoWarn>1701;1702;SKEXP0051</NoWarn>
+    <NoWarn>1701;1702;SKEXP0050</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <NoWarn>1701;1702;SKEXP0051</NoWarn>
+    <NoWarn>1701;1702;SKEXP0050</NoWarn>
   </PropertyGroup>
     
   <PropertyGroup>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
-
+    
   <ItemGroup>
-    <PackageReference Include="Microsoft.SemanticKernel.Plugins.Document" Version="1.1.0-alpha" />
+    <PackageReference Include="ExcelNumberFormat" Version="1.1.0" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.71" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="8.0.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Plugins.Document" Version="1.17.2-alpha" />
     <PackageReference Include="PdfPig" Version="0.1.8" />
+    <PackageReference Include="ScratchPad.NPOI.HWPF" Version="2.5.7" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
+    <PackageReference Include="System.Memory.Data" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Encamina.Enmarcha.AI.Abstractions\Encamina.Enmarcha.AI.Abstractions.csproj" />
     <ProjectReference Include="..\Encamina.Enmarcha.Core\Encamina.Enmarcha.Core.csproj" />
+    <ProjectReference Include="..\Encamina.Enmarcha.DependencyInjection\Encamina.Enmarcha.DependencyInjection.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -42,9 +50,13 @@
       <LastGenOutput>ExceptionMessages.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Encamina.Enmarcha.SemanticKernel.Connectors.Document.Tests" />
+  </ItemGroup>
     
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\"/>
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

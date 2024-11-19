@@ -61,6 +61,33 @@ namespace Encamina.Enmarcha.Core.DataAnnotations.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to At least one of the following properties must be provided: {0}..
+        /// </summary>
+        internal static string MissingRequiredProperty {
+            get {
+                return ResourceManager.GetString("MissingRequiredProperty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The number of conditional property names must match the number of expected conditional values..
+        /// </summary>
+        internal static string PropertiesConditionsMissmatchRequiredIf {
+            get {
+                return ResourceManager.GetString("PropertiesConditionsMissmatchRequiredIf", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Property {0} not found!.
+        /// </summary>
+        internal static string PropertyNotFound {
+            get {
+                return ResourceManager.GetString("PropertyNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The value of &apos;{0}&apos; must be a valid and not empty or whitespace string!.
         /// </summary>
         internal static string ValueIsEmptyOrWhiteSpace {
@@ -75,6 +102,15 @@ namespace Encamina.Enmarcha.Core.DataAnnotations.Resources {
         internal static string ValueIsInvalidGuid {
             get {
                 return ResourceManager.GetString("ValueIsInvalidGuid", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The value of &apos;{0}&apos; is required when the value of &apos;{1}&apos; is {2}!.
+        /// </summary>
+        internal static string ValueIsRequiredIf {
+            get {
+                return ResourceManager.GetString("ValueIsRequiredIf", resourceCulture);
             }
         }
         

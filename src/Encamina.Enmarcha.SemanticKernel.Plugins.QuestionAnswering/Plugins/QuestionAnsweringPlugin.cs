@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 
 using Encamina.Enmarcha.AI.OpenAI.Abstractions;
+using Encamina.Enmarcha.SemanticKernel.Extensions;
 
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
@@ -13,19 +14,35 @@ namespace Encamina.Enmarcha.SemanticKernel.Plugins.QuestionAnswering.Plugins;
 public class QuestionAnsweringPlugin
 {
     private const string QuestionAnsweringFromContextFunctionPrompt = @"
-You ANSWER questions with information from the CONTEXT.
-ONLY USE information from CONTEXT
-The ANSWER MUST BE ALWAYS in the SAME LANGUAGE as the QUESTION. 
-If you are unable to find the answer or do not know it, simply say ""I don't know"". 
-The ""I don't know"" response MUST BE TRANSLATED ALWAYS to the SAME LANGUAGE as the QUESTION. 
-If presented with a logic question about the CONTEXT, attempt to calculate the answer. 
-ALWAYS RESPOND with a FINAL ANSWER, DO NOT CONTINUE the conversation.
-
 [CONTEXT]
+
 {{$context}}
 
+[END CONTEXT]
+
+[INSTRUCTIONS]
+
+1. You ANSWER questions with information from the [CONTEXT].
+2. ONLY USE information from [CONTEXT].
+3. If you are unable to find the answer or do not know it, simply say ""I don't know"". 
+4. The ""I don't know"" response MUST BE TRANSLATED ALWAYS to {{$locale}}. 
+5. If presented with a logic question about the [CONTEXT], attempt to calculate the answer. 
+6. ALWAYS RESPOND with a FINAL ANSWER, DO NOT CONTINUE the conversation.
+7. The [ANSWER] MUST BE ALWAYS in {{$locale}}.
+
+[END INSTRUCTIONS]
+
 [QUESTION]
+
 {{$input}}
+
+[END QUESTION]
+
+[IMPORTANT]
+
+- Remember, your [ANSWER] MUST ALWAYS BE in {{$locale}}.
+
+[END IMPORTANT]
 
 [ANSWER]
 
@@ -65,16 +82,18 @@ ALWAYS RESPOND with a FINAL ANSWER, DO NOT CONTINUE the conversation.
     /// <param name="minRelevance">Minimum relevance of the response.</param>
     /// <param name="resultsLimit">Maximum number of results from searching each memory's collection.</param>
     /// <param name="collectionSeparator">The character that separates each memory's collection name in <paramref name="collectionsStr"/>.</param>
+    /// <param name="locale">The locale in which the response is generated. This parameter is optional. If not provided, the <paramref name="question"/> language is used.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests.</param>
     /// <returns>A string representing the answer for the <paramref name="question"/> based on all the information found from searching the memory's collections.</returns>
     [KernelFunction]
     [Description(@"Answer questions using information obtained from a memory. The given question is used as query to search from a list (usually comma-separated) of collections. The result is used as context to answer the question.")]
-    public virtual async Task<string> QuestionAnsweringFromMemoryQueryAsync(
+    public virtual async Task<string?> QuestionAnsweringFromMemoryQueryAsync(
         [Description(@"The question to answer and search the memory for")] string question,
         [Description(@"A list of memory's collections, usually comma-separated")] string collectionsStr,
         [Description(@"Minimum relevance for the search results")] double minRelevance = 0.75,
         [Description(@"Maximum number of results per queried collection")] int resultsLimit = 20,
         [Description(@"The character (usually a comma) that separates each collection from the given list of collections")] char collectionSeparator = ',',
+        [Description(@"The locale in which the response is generated. This parameter is optional. If not provided, the question language is used.")] string? locale = null,
         CancellationToken cancellationToken = default)
     {
         // This method was designed to maximize the use of tokens in an LLM model (like GPT).
@@ -84,12 +103,13 @@ ALWAYS RESPOND with a FINAL ANSWER, DO NOT CONTINUE the conversation.
         // limits of the available tokens for the context argument of the «QuestionAnsweringFromContext» function.
 
         var modelMaxTokens = ModelInfo.GetById(modelName).MaxTokens; // Get this information early, to throw an exception if the model is not found (fail fast).
+        var questionAnsweringFunction = kernel.Plugins[PluginsInfo.QuestionAnsweringPlugin.Name][PluginsInfo.QuestionAnsweringPlugin.Functions.QuestionAnsweringFromContext.Name];
 
         var memoryQueryVariables = new KernelArguments()
         {
             [@"query"] = question,
             [@"collectionsStr"] = collectionsStr,
-            [@"responseTokenLimit"] = modelMaxTokens - QuestionAnsweringFromContextFunctionsUsedTokens(question),
+            [@"responseTokenLimit"] = modelMaxTokens - await GetQuestionAnsweringFromContextFunctionUsedTokensAsync(questionAnsweringFunction, question, locale, cancellationToken),
             [@"minRelevance"] = minRelevance,
             [@"resultsLimit"] = resultsLimit,
             [@"collectionSeparator"] = collectionSeparator,
@@ -102,21 +122,15 @@ ALWAYS RESPOND with a FINAL ANSWER, DO NOT CONTINUE the conversation.
 
         var memoryQueryResult = memoryQueryFunctionResult.GetValue<string>();
 
-        // If the «QueryMemory» function from the «MemoryQueryPlugin» does not return any result, there is no point in trying to answering the question. In such a case, `null` is returned.
-        if (string.IsNullOrWhiteSpace(memoryQueryResult))
-        {
-            return null;
-        }
-
         // Return to the context of the response function and set the result of the memory query.
         var questionAnsweringVariables = new KernelArguments()
         {
             [@"input"] = question,
             [@"context"] = memoryQueryResult,
+            [@"locale"] = locale,
         };
 
-        var questionAnsweringFunctionResult = await kernel.Plugins[PluginsInfo.QuestionAnsweringPlugin.Name][PluginsInfo.QuestionAnsweringPlugin.Functions.QuestionAnsweringFromContext.Name]
-                                                          .InvokeAsync(kernel, questionAnsweringVariables, cancellationToken);
+        var questionAnsweringFunctionResult = await questionAnsweringFunction.InvokeAsync(kernel, questionAnsweringVariables, cancellationToken);
 
         return questionAnsweringFunctionResult.GetValue<string>();
     }
@@ -126,19 +140,22 @@ ALWAYS RESPOND with a FINAL ANSWER, DO NOT CONTINUE the conversation.
     /// </summary>
     /// <param name="input">The question to answer with information from a context given in <paramref name="context"/>.</param>
     /// <param name="context">The context with information that may contain the answer for question from <paramref name="input"/>.</param>
+    /// <param name="locale">The locale in which the response is generated. This parameter is optional. If not provided, the <paramref name="input"/> language is used.</param>
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests.</param>
     /// <returns>A string representing the answer for the <paramref name="input"/> based on all the information found from searching the memory's collections.</returns>
     [KernelFunction]
     [Description(@"Answer questions using information from a context.")]
-    public virtual async Task<string> QuestionAnsweringFromContextAsync(
+    public virtual async Task<string?> QuestionAnsweringFromContextAsync(
         [Description(@"The question to answer with information from a context.")] string input,
         [Description(@"Context with information that may contain the answer for question")] string context,
+        [Description(@"The locale in which the response is generated. This parameter is optional. If not provided, the input language is used.")] string? locale = null,
         CancellationToken cancellationToken = default)
     {
         var functionArguments = new KernelArguments(questionAnsweringFromContextFunctionExecutionSettings)
         {
             [@"input"] = input,
             [@"context"] = context,
+            [@"locale"] = GetAnswerLocale(locale),
         };
 
         var functionResult = await kernel.InvokePromptAsync(QuestionAnsweringFromContextFunctionPrompt, functionArguments, cancellationToken: cancellationToken);
@@ -146,8 +163,21 @@ ALWAYS RESPOND with a FINAL ANSWER, DO NOT CONTINUE the conversation.
         return functionResult.GetValue<string>();
     }
 
-    private int QuestionAnsweringFromContextFunctionsUsedTokens(string input)
+    private static string GetAnswerLocale(string? locale)
     {
-        return tokenLengthFunction(QuestionAnsweringFromContextFunctionPrompt) + questionAnsweringFromContextFunctionExecutionSettings.MaxTokens.Value + tokenLengthFunction(input);
+        return string.IsNullOrWhiteSpace(locale)
+            ? "the SAME LANGUAGE as the QUESTION"
+            : $"\"{locale}\" LANGUAGE";
+    }
+
+    private Task<int> GetQuestionAnsweringFromContextFunctionUsedTokensAsync(KernelFunction questionAnsweringFromContextFunction, string input, string? locale, CancellationToken cancellationToken)
+    {
+        var functionArguments = new KernelArguments(questionAnsweringFromContextFunctionExecutionSettings)
+        {
+            [@"input"] = input,
+            [@"locale"] = GetAnswerLocale(locale),
+        };
+
+        return kernel.GetKernelFunctionUsedTokensFromPromptAsync(QuestionAnsweringFromContextFunctionPrompt, questionAnsweringFromContextFunction, functionArguments, tokenLengthFunction, cancellationToken: cancellationToken);
     }
 }

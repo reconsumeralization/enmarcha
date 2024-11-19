@@ -50,7 +50,7 @@ internal sealed class EmailService : IEmailBuilder, IEmailProvider, ISmtpClientO
         => AddAttachment(fileName, data, string.IsNullOrWhiteSpace(contentTypeValue) ? null : new ContentType(contentTypeValue));
 
     /// <inheritdoc/>
-    public IEmailBuilder AddAttachment(string fileName, byte[] data, ContentType contentType)
+    public IEmailBuilder AddAttachment(string fileName, byte[] data, ContentType? contentType)
     {
         Specification.Attachments.Add(new EmailAttachmentSpecification()
         {
@@ -63,7 +63,7 @@ internal sealed class EmailService : IEmailBuilder, IEmailProvider, ISmtpClientO
     }
 
     /// <inheritdoc/>
-    public IEmailBuilder AddRecipient(string emailAddress, string recipientName = null, EmailRecipientType recipientType = EmailRecipientType.TO)
+    public IEmailBuilder AddRecipient(string emailAddress, string? recipientName = null, EmailRecipientType recipientType = EmailRecipientType.TO)
     {
         Guard.IsNotNullOrWhiteSpace(emailAddress);
 
@@ -108,13 +108,18 @@ internal sealed class EmailService : IEmailBuilder, IEmailProvider, ISmtpClientO
         }
 
         await smtpClient.ConnectAsync(SmtpClientOptions.Host, SmtpClientOptions.Port, SmtpClientOptions.UseSSL, cancellationToken);
-        await smtpClient.AuthenticateAsync(SmtpClientOptions.User, SmtpClientOptions.Password, cancellationToken);
+
+        if (SmtpClientOptions.AuthenticationRequired)
+        {
+            await smtpClient.AuthenticateAsync(SmtpClientOptions.User, SmtpClientOptions.Password, cancellationToken);
+        }
+
         await smtpClient.SendAsync(mailMessage, cancellationToken);
         await smtpClient.DisconnectAsync(true, cancellationToken);
     }
 
     /// <inheritdoc/>
-    public IEmailBuilder SetBody(string body, bool isHtml = false)
+    public IEmailBuilder SetBody(string? body, bool isHtml = false)
     {
         Specification.Body = body;
         Specification.IsHtmlBody = isHtml;
@@ -128,7 +133,7 @@ internal sealed class EmailService : IEmailBuilder, IEmailProvider, ISmtpClientO
     public IEmailBuilder SetSender(string emailAddress) => SetSender(emailAddress, null);
 
     /// <inheritdoc/>
-    public IEmailBuilder SetSender(string emailAddress, string senderName)
+    public IEmailBuilder SetSender(string emailAddress, string? senderName)
     {
         Guard.IsNotNullOrWhiteSpace(emailAddress);
         Guard.IsTrue(emailAddress.IsValidEmail(), nameof(emailAddress), @"Parameter is not a valid e-mail format!");
@@ -143,7 +148,20 @@ internal sealed class EmailService : IEmailBuilder, IEmailProvider, ISmtpClientO
     }
 
     /// <inheritdoc/>
-    public IEmailBuilder SetDefaultSender(string senderName = null) => SetSender(SmtpClientOptions.User, senderName);
+    public IEmailBuilder SetDefaultSender(string? senderName = null) => SetSender(SmtpClientOptions.User, senderName);
+
+    /// <inheritdoc/>
+    public IEmailBuilder SetRecipients(IEnumerable<(string EmailAddress, string? RecipientName, EmailRecipientType RecipientType)> recipients)
+    {
+        Specification.To.Clear();
+
+        foreach (var (emailAddress, recipientName, recipientType) in recipients)
+        {
+            AddRecipient(emailAddress, recipientName, recipientType);
+        }
+
+        return this;
+    }
 
     /// <inheritdoc/>
     /// <remarks>This implementation does not allows the subject to be <see langword="null"/>.</remarks>

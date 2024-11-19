@@ -1,9 +1,9 @@
-﻿using System.Net.Mime;
+﻿#pragma warning disable S2360 // Optional parameters should not be used
+
+using System.Net.Mime;
 using System.Text;
 
 namespace Encamina.Enmarcha.Email.Abstractions;
-
-#pragma warning disable S2360 // Optional parameters should not be used
 
 /// <summary>
 /// Represents a builder that allows creating and sending a new e-mail.
@@ -38,7 +38,7 @@ public interface IEmailBuilder
     /// </summary>
     /// <param name="senderName">Optional (custom) sender name.</param>
     /// <returns>The <see cref="IEmailBuilder"/> so that additional calls can be chained.</returns>
-    IEmailBuilder SetDefaultSender(string senderName = null);
+    IEmailBuilder SetDefaultSender(string? senderName = null);
 
     /// <summary>
     /// Adds an attachment.
@@ -73,7 +73,7 @@ public interface IEmailBuilder
     /// <param name="recipientName">The recipient's name. Defaults to <see langword="null"/>.</param>
     /// <param name="recipientType">The type of recipient (like 'to', 'cc', or 'bcc'). Defaults to <see cref="EmailRecipientType.TO"/>.</param>
     /// <returns>The <see cref="IEmailBuilder"/> so that additional calls can be chained.</returns>
-    IEmailBuilder AddRecipient(string emailAddress, string recipientName = null, EmailRecipientType recipientType = EmailRecipientType.TO);
+    IEmailBuilder AddRecipient(string emailAddress, string? recipientName = null, EmailRecipientType recipientType = EmailRecipientType.TO);
 
     /// <summary>
     /// Sets the e-mail's subject.
@@ -97,6 +97,18 @@ public interface IEmailBuilder
     /// <param name="isHtml">A flag to indicate whether the body of the e-mail is an HTML or not. Default is <see langword="false"/>.</param>
     /// <returns>The <see cref="IEmailBuilder"/> so that additional calls can be chained.</returns>
     IEmailBuilder SetBody(StringBuilder body, bool isHtml = false);
+
+    /// <summary>
+    /// Sets the e-mail addresses for the recipients of an e-mail, typically for the 'TO', 'CC', or 'BCC' fields, replacing any previously set recipients.
+    /// </summary>
+    /// <param name="recipients">
+    /// A collection of tuples where each tuple contains:
+    /// - <c>EmailAddress</c>: The recipient's e-mail address.
+    /// - <c>RecipientName</c>: The recipient's name./>.
+    /// - <c>RecipientType</c>: The type of recipient (like 'to', 'cc', or 'bcc')./>.
+    /// </param>
+    /// <returns>The <see cref="IEmailBuilder"/> so that additional calls can be chained.</returns>
+    IEmailBuilder SetRecipients(IEnumerable<(string EmailAddress, string? RecipientName, EmailRecipientType RecipientType)> recipients);
 
     /// <summary>
     /// Sends the e-mail, thus effectively ending its building.

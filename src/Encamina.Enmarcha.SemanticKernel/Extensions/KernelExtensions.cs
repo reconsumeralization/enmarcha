@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.TextGeneration;
 
 namespace Encamina.Enmarcha.SemanticKernel.Extensions;
@@ -39,7 +40,7 @@ public static class KernelExtensions
     /// </param>
     /// <param name="cancellationToken">A cancellation token that can be used to receive notice of cancellation.</param>
     /// <returns>A string containing the generated prompt.</returns>
-    public static async Task<string> GetKernelFunctionPromptAsync(this Kernel kernel, string pluginDirectory, KernelFunction function, KernelArguments arguments, string promptTemplateFormat = null, IPromptTemplateFactory promptTemplateFactory = null, CancellationToken cancellationToken = default)
+    public static async Task<string> GetKernelFunctionPromptAsync(this Kernel kernel, string pluginDirectory, KernelFunction function, KernelArguments arguments, string? promptTemplateFormat = null, IPromptTemplateFactory? promptTemplateFactory = null, CancellationToken cancellationToken = default)
     {
         var promptConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, pluginDirectory, function.Name, Constants.ConfigFile);
 
@@ -55,11 +56,9 @@ public static class KernelExtensions
             throw new InvalidOperationException(ExceptionMessages.ResourceManager.GetFormattedStringByCurrentCulture(nameof(ExceptionMessages.PromptTemplateFileNotFound), function.Name, pluginDirectory));
         }
 
-        return await InnerGetKernelFunctionPromptAsync(
+        return await GetKernelPromptAsync(
             kernel,
-            function.Name,
             await File.ReadAllTextAsync(promptTemplatePath, cancellationToken),
-            await File.ReadAllTextAsync(promptConfigPath, cancellationToken),
             arguments,
             promptTemplateFormat,
             promptTemplateFactory,
@@ -85,7 +84,7 @@ public static class KernelExtensions
     /// </param>
     /// <param name="cancellationToken">A cancellation token that can be used to receive notice of cancellation.</param>
     /// <returns>A string containing the generated prompt.</returns>
-    public static async Task<string> GetKernelFunctionPromptAsync(this Kernel kernel, string pluginName, Assembly assembly, KernelFunction function, KernelArguments arguments, string promptTemplateFormat = null, IPromptTemplateFactory promptTemplateFactory = null, CancellationToken cancellationToken = default)
+    public static async Task<string> GetKernelFunctionPromptAsync(this Kernel kernel, string pluginName, Assembly assembly, KernelFunction function, KernelArguments arguments, string? promptTemplateFormat = null, IPromptTemplateFactory? promptTemplateFactory = null, CancellationToken cancellationToken = default)
     {
         Guard.IsNotNullOrWhiteSpace(pluginName);
 
@@ -101,15 +100,49 @@ public static class KernelExtensions
             throw new InvalidOperationException(ExceptionMessages.ResourceManager.GetFormattedStringByCurrentCulture(nameof(ExceptionMessages.PromptEmbeddedResourcesNotFound), pluginName, function.Name, assembly.GetName().Name));
         }
 
-        return await InnerGetKernelFunctionPromptAsync(
+        return await GetKernelPromptAsync(
             kernel,
-            function.Name,
             ReadResource(assembly, promptTemplateResourceName),
-            ReadResource(assembly, promptConfigurationResourceName),
             arguments,
             promptTemplateFormat,
             promptTemplateFactory,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Generates the final prompt for a given prompt using the arguments.
+    /// </summary>
+    /// <param name="kernel">The <see cref="Kernel"/> to work with.</param>
+    /// <param name="promptTemplate">The name of the plugin associated with the prompt function.</param>
+    /// <param name="arguments">The arguments passed to the function.</param>
+    /// <param name="promptTemplateFormat">
+    /// The template format for the prompt. This must be provided if <paramref name="promptTemplateFactory"/> is not <see langword="null"/>. This parameter is optional.
+    /// </param>
+    /// <param name="promptTemplateFactory">
+    /// A <see cref="IPromptTemplateFactory"/> to interpret the prompt and its configuration into a <see cref="IPromptTemplate"/>. This parameter is optional.
+    /// </param>
+    /// <param name="cancellationToken">A cancellation token that can be used to receive notice of cancellation.</param>
+    /// <returns>A string containing the generated prompt.</returns>
+    public static Task<string> GetKernelPromptAsync(this Kernel kernel, string promptTemplate, KernelArguments arguments, string? promptTemplateFormat = null, IPromptTemplateFactory? promptTemplateFactory = null, CancellationToken cancellationToken = default)
+    {
+        if (promptTemplateFactory is not null && string.IsNullOrWhiteSpace(promptTemplateFormat))
+        {
+            throw new ArgumentException($@"Template format is required when providing a `{nameof(promptTemplateFactory)}`!", nameof(promptTemplateFormat));
+        }
+
+        var promptConfig = new PromptTemplateConfig(promptTemplate)
+        {
+            TemplateFormat = promptTemplateFormat ?? PromptTemplateConfig.SemanticKernelTemplateFormat,
+        };
+
+        if (arguments.ExecutionSettings is not null)
+        {
+            promptConfig.ExecutionSettings = arguments.ExecutionSettings.ToDictionary(x => x.Key, x => x.Value);
+        }
+
+        var factory = promptTemplateFactory ?? new KernelPromptTemplateFactory(NullLoggerFactory.Instance);
+
+        return factory.Create(promptConfig).RenderAsync(kernel, arguments, cancellationToken);
     }
 
     /// <summary>
@@ -128,7 +161,7 @@ public static class KernelExtensions
     /// </param>
     /// <param name="cancellationToken">A cancellation token that can be used to receive notice of cancellation.</param>
     /// <returns>The total number of tokens used plus the maximum allowed response tokens specified in the function.</returns>
-    public static async Task<int> GetKernelFunctionUsedTokensAsync(this Kernel kernel, string pluginDirectory, KernelFunction function, KernelArguments arguments, Func<string, int> tokenLengthFunction, string promptTemplateFormat = null, IPromptTemplateFactory promptTemplateFactory = null, CancellationToken cancellationToken = default)
+    public static async Task<int> GetKernelFunctionUsedTokensAsync(this Kernel kernel, string pluginDirectory, KernelFunction function, KernelArguments arguments, Func<string, int> tokenLengthFunction, string? promptTemplateFormat = null, IPromptTemplateFactory? promptTemplateFactory = null, CancellationToken cancellationToken = default)
     {
         return tokenLengthFunction(await kernel.GetKernelFunctionPromptAsync(pluginDirectory, function, arguments, promptTemplateFormat, promptTemplateFactory, cancellationToken))
             + GetMaxTokensFromKernelFunction(kernel, function, arguments);
@@ -151,9 +184,31 @@ public static class KernelExtensions
     /// </param>
     /// <param name="cancellationToken">A cancellation token that can be used to receive notice of cancellation.</param>
     /// <returns>The total number of tokens used plus the maximum allowed response tokens specified in the function.</returns>
-    public static async Task<int> GetKernelFunctionUsedTokensAsync(this Kernel kernel, string pluginName, Assembly assembly, KernelFunction function, KernelArguments arguments, Func<string, int> tokenLengthFunction, string promptTemplateFormat = null, IPromptTemplateFactory promptTemplateFactory = null, CancellationToken cancellationToken = default)
+    public static async Task<int> GetKernelFunctionUsedTokensAsync(this Kernel kernel, string pluginName, Assembly assembly, KernelFunction function, KernelArguments arguments, Func<string, int> tokenLengthFunction, string? promptTemplateFormat = null, IPromptTemplateFactory? promptTemplateFactory = null, CancellationToken cancellationToken = default)
     {
         return tokenLengthFunction(await kernel.GetKernelFunctionPromptAsync(pluginName, assembly, function, arguments, promptTemplateFormat, promptTemplateFactory, cancellationToken))
+            + GetMaxTokensFromKernelFunction(kernel, function, arguments);
+    }
+
+    /// <summary>
+    /// Calculates the current total number of tokens used in generating a prompt from an inline prompt function.
+    /// </summary>
+    /// <param name="kernel">The <see cref="Kernel"/> instance to work with.</param>
+    /// <param name="promptTemplate">The template of the inline prompt function.</param>
+    /// <param name="function">The inline prompt function created from the template.</param>
+    /// <param name="arguments">The arguments passed to the function.</param>
+    /// <param name="tokenLengthFunction">A function to calculate the length of a string in tokens.</param>
+    /// <param name="promptTemplateFormat">
+    /// The template format for the prompt. This must be provided if <paramref name="promptTemplateFactory"/> is not <see langword="null"/>. This parameter is optional.
+    /// </param>
+    /// <param name="promptTemplateFactory">
+    /// A <see cref="IPromptTemplateFactory"/> to interpret the prompt and its configuration into a <see cref="IPromptTemplate"/>. This parameter is optional.
+    /// </param>
+    /// <param name="cancellationToken">A cancellation token that can be used to receive notice of cancellation.</param>
+    /// <returns>The total number of tokens used, plus the maximum allowed response tokens specified in the function.</returns>
+    public static async Task<int> GetKernelFunctionUsedTokensFromPromptAsync(this Kernel kernel, string promptTemplate, KernelFunction function, KernelArguments arguments, Func<string, int> tokenLengthFunction, string? promptTemplateFormat = null, IPromptTemplateFactory? promptTemplateFactory = null, CancellationToken cancellationToken = default)
+    {
+        return tokenLengthFunction(await kernel.GetKernelPromptAsync(promptTemplate, arguments, promptTemplateFormat, promptTemplateFactory, cancellationToken))
             + GetMaxTokensFromKernelFunction(kernel, function, arguments);
     }
 
@@ -168,7 +223,7 @@ public static class KernelExtensions
     /// </param>
     /// <param name="loggerFactory">The <see cref="ILoggerFactory"/> to use for logging. If null, no logging will be performed.</param>
     /// <returns>A list of all the semantic functions found in the assembly, indexed by function name.</returns>
-    public static IEnumerable<KernelPlugin> ImportPromptFunctionsFromAssembly(this Kernel kernel, Assembly assembly, IPromptTemplateFactory promptTemplateFactory = null, ILoggerFactory loggerFactory = null)
+    public static IEnumerable<KernelPlugin> ImportPromptFunctionsFromAssembly(this Kernel kernel, Assembly assembly, IPromptTemplateFactory? promptTemplateFactory = null, ILoggerFactory? loggerFactory = null)
     {
         var plugins = new List<KernelPlugin>();
 
@@ -197,7 +252,7 @@ public static class KernelExtensions
 
         var innerLoggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
 
-        var factory = promptTemplateFactory ?? new KernelPromptTemplateFactory(innerLoggerFactory ?? NullLoggerFactory.Instance);
+        var factory = promptTemplateFactory ?? new KernelPromptTemplateFactory(innerLoggerFactory);
 
         foreach (var pluginsInfoGroup in pluginsInfoGroups)
         {
@@ -228,48 +283,38 @@ public static class KernelExtensions
     private static int GetMaxTokensFromKernelFunction(Kernel kernel, KernelFunction function, KernelArguments arguments)
     {
         // Try to use IChatCompletionService as the IAService to retrieve the service settings, but fallback to ITextGenerationService if it's not available.
-        // Once the service settings are retrieved, get the value of the `max_tokens` property from the extension data.
+        // Once the service settings are retrieved, get the value of the MaxTokens property from the MaxTokens property or extension data.
         // If the `max_tokens` property is found, check is a JsonElement and try to get its value as an integer.
         // Finally, if the value is an integer, return it.
-        // In any other case (if the service settings are not found, or the `max_tokens` property is not found, or the value is not an integer), throw an exception.
-        return (kernel.ServiceSelector.TrySelectAIService<IChatCompletionService>(kernel, function, arguments, out _, out var serviceSettings) || kernel.ServiceSelector.TrySelectAIService<ITextGenerationService>(kernel, function, arguments, out _, out serviceSettings))
-               && serviceSettings?.ExtensionData is not null
-               && serviceSettings.ExtensionData.TryGetValue(@"max_tokens", out var maxTokensObj)
-               && maxTokensObj is JsonElement maxTokensElement
-               && maxTokensElement.TryGetInt32(out var value)
-                ? value
-                : 0;
+        // In any other case (if the service settings are not found, MaxTokens property is not found or the `max_tokens` property is not found, or the value is not an integer), return 0.
+        if (kernel.ServiceSelector.TrySelectAIService<IChatCompletionService>(kernel, function, arguments, out _, out var serviceSettings) ||
+            kernel.ServiceSelector.TrySelectAIService<ITextGenerationService>(kernel, function, arguments, out _, out serviceSettings))
+        {
+            if (serviceSettings is OpenAIPromptExecutionSettings openAiPromptExecutionSettings
+                && openAiPromptExecutionSettings.MaxTokens.HasValue)
+            {
+                return openAiPromptExecutionSettings.MaxTokens.Value;
+            }
+
+            if (serviceSettings?.ExtensionData is not null
+                && serviceSettings.ExtensionData.TryGetValue(@"max_tokens", out var maxTokensObj)
+                && maxTokensObj is JsonElement maxTokensElement
+                && maxTokensElement.TryGetInt32(out var value))
+            {
+                return value;
+            }
+        }
+
+        return 0;
     }
 
     private static string GetResourceNameFromPluginInfoByFileName(IGrouping<(string PluginName, string FunctionName), (string ResourceName, string FileName)> pluginsInfoGroup, string fileName)
         => pluginsInfoGroup.Single(x => fileName.Equals(x.FileName, StringComparison.OrdinalIgnoreCase)).ResourceName;
 
-    private static async Task<string> InnerGetKernelFunctionPromptAsync(Kernel kernel, string functionName, string promptTemplate, string promptConfigJsonString, KernelArguments arguments, string templateFormat = null, IPromptTemplateFactory promptTemplateFactory = null, CancellationToken cancellationToken = default)
-    {
-        if (promptTemplateFactory is not null && string.IsNullOrWhiteSpace(templateFormat))
-        {
-            throw new ArgumentException($"Template format is required when providing a `{nameof(promptTemplateFactory)}`!", nameof(templateFormat));
-        }
-
-        var promptConfig = PromptTemplateConfig.FromJson(promptConfigJsonString);
-        promptConfig.Name = functionName;
-        promptConfig.Template = promptTemplate;
-        promptConfig.TemplateFormat = templateFormat ?? PromptTemplateConfig.SemanticKernelTemplateFormat;
-
-        if (arguments.ExecutionSettings is not null)
-        {
-            promptConfig.ExecutionSettings = arguments.ExecutionSettings.ToDictionary(x => x.Key, x => x.Value);
-        }
-
-        var factory = promptTemplateFactory ?? new KernelPromptTemplateFactory(NullLoggerFactory.Instance);
-
-        return await factory.Create(promptConfig).RenderAsync(kernel, arguments, cancellationToken);
-    }
-
     private static string ReadResource(Assembly assembly, string resourceName)
     {
-        using var stream = assembly.GetManifestResourceStream(resourceName);
-        using var streamReader = new StreamReader(stream);
+        using var stream = assembly.GetManifestResourceStream(resourceName) ?? throw new InvalidOperationException($"The resource stream for '{resourceName}' is null. Ensure the resource name is correct and the resource is embedded in the assembly.");
+        using var streamReader = new StreamReader(stream!);
 
         return streamReader.ReadToEnd();
     }
